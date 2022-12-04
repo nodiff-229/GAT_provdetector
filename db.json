@@ -1,0 +1,4 @@
+{
+  "uri": "postgresql://provdetector:Re2Detect1@localhost:5432/provdetector",
+  "uri_remote": "postgresql://provdetector:Re2Detect1@166.111.83.59:5432/provdetector"
+}
