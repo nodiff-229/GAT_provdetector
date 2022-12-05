@@ -101,7 +101,7 @@ def evaluate(model, features, labels, mask):
 # TODO 加载自建图，现在先造个假图
 
 # 加载数据集
-dataset = CoraGraphDataset('./cora')
+dataset = CoraGraphDataset('../cora')
 graph = dataset[0]
 graph = dgl.remove_self_loop(graph)
 graph = dgl.add_self_loop(graph)
