@@ -18,10 +18,9 @@ def fake_dataset():
     g.ndata['name'] = torch.randn(g.num_nodes(), 50).type(torch.float32)
     g.ndata['type'] = torch.randn(g.num_nodes(), 50).type(torch.float32)
 
-
     # 假标签，假设含有10%的异常节点
-    ones = torch.ones((int(0.9 * g.num_nodes()), 1))
-    zeros = torch.zeros((int(0.1 * g.num_nodes()), 1))
+    zeros = torch.zeros((int(0.9 * g.num_nodes()), 1))
+    ones = torch.ones((int(0.1 * g.num_nodes()), 1))
     labels = torch.concat((ones, zeros), dim=0)
     labels = labels[torch.randperm(labels.size(0))]
     g.ndata['label'] = labels
@@ -29,6 +28,7 @@ def fake_dataset():
     # 边有得分和关系两种特征，分别设为1维和50维
     g.edata['score'] = torch.randn(g.num_edges(), 1).type(torch.float32)
     g.edata['relation'] = torch.randn(g.num_edges(), 50).type(torch.float32)
+    g.edata['timestamp'] = torch.randn(g.num_edges(), 1).type(torch.float32)
 
     # 划分训练集，验证集和测试集
     # 训练集60%，验证集10%，测试集30%
@@ -48,4 +48,3 @@ def fake_dataset():
 
 if __name__ == '__main__':
     g = fake_dataset()
-
