@@ -6,19 +6,19 @@ import json
 
 
 def get_raw_graph(dct):
-    # TODO
+    # TODO: 郭礼华
     u, v = None
     g = dgl.graph((u, v))
     return g
 
 
 def get_node_feat(dct):
-    # TODO
+    # TODO: 吴非凡
     pass
 
 
 def get_edge_feat(dct):
-    # TODO
+    # TODO: 时辰轩
     pass
 
 
