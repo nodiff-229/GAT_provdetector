@@ -2,6 +2,44 @@ import torch
 import dgl
 import numpy as np
 import pandas as pd
+import json
+
+
+def get_raw_graph(dct):
+    # TODO
+    u, v = None
+    g = dgl.graph((u, v))
+    return g
+
+
+def get_node_feat(dct):
+    # TODO
+    pass
+
+
+def get_edge_feat(dct):
+    # TODO
+    pass
+
+
+def read_graph(filepath):
+    dct = {}
+    with open(filepath, 'r') as f:
+        dct = json.load(f)
+
+    g = get_raw_graph(dct) # 读取图
+
+    node_feat = get_node_feat(dct)
+    g.ndata['name'] = node_feat['name']
+    g.ndata['type'] = node_feat['type']
+    g.ndata['label'] = node_feat['label']
+
+    edge_data = get_edge_feat(dct)
+    g.edata['score'] = edge_data['score']
+    g.edata['relation'] = edge_data['relation']
+    g.edata['timestamp'] = edge_data['timestamp']
+    
+    return g
 
 
 def fake_dataset():
