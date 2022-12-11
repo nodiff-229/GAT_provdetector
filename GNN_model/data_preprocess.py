@@ -2,12 +2,34 @@ import torch
 import dgl
 import numpy as np
 import pandas as pd
+from collections import defaultdict
 import json
 
 
 def get_raw_graph(dct):
     # TODO: 郭礼华
-    u, v = None
+
+    # 先构建节点名字到idx的映射
+    name_to_idx = defaultdict(int)
+    idx = 0
+    for node in dct['nodes']:
+        assert not node['id'] in name_to_idx.keys() # 避免有节点名字重复
+        name_to_idx[node['id']] = idx
+        idx += 1
+
+    # 构建边
+    edge_num = len(dct['edges'])
+    u = torch.zeros((edge_num,)).type(torch.int)
+    v = torch.zeros((edge_num,)).type(torch.int)
+    for i in range(edge_num):
+        edge = dct['edges'][i]
+        assert edge['src'][0] in name_to_idx.keys()
+        assert edge['target'][0] in name_to_idx.keys()
+        src_idx = name_to_idx[edge['src'][0]]
+        target_idx = name_to_idx[edge['target'][0]]
+        u[i] = src_idx
+        v[i] = target_idx
+        
     g = dgl.graph((u, v))
     return g
 
@@ -85,4 +107,5 @@ def fake_dataset():
 
 
 if __name__ == '__main__':
-    g = fake_dataset()
+    # g = fake_dataset()
+    g = read_graph('..\GNN_data_integrate\M1.json')
