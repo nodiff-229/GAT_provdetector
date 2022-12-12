@@ -41,7 +41,26 @@ def get_node_feat(dct):
 
 def get_edge_feat(dct):
     # TODO: 时辰轩
-    pass
+    # 统计只有这三种relation，所以用简单的3维one-hot表示
+    relations = {
+        'down' : 0,
+        'transport_remote_ip' : 1,
+        'refer' : 2
+    }
+    edge_feat = {}
+    edge_num = len(dct['edges'])
+    timestamp = torch.zeros((edge_num, 1)).type(torch.int64)
+    score = torch.zeros((edge_num, 1)).type(torch.float64)
+    relation = torch.zeros((edge_num, 3)).type(torch.int)
+    for i in range(edge_num):
+        edge = dct['edges'][i]
+        timestamp[i] = edge['time']
+        score[i] = edge['w_score']
+        relation[i][relations[edge['rela']]] = 1
+    edge_feat['timestamp'] = timestamp
+    edge_feat['score'] = score
+    edge_feat['relation'] = relation
+    return edge_feat
 
 
 def read_graph(filepath):
@@ -60,7 +79,7 @@ def read_graph(filepath):
     g.edata['score'] = edge_data['score']
     g.edata['relation'] = edge_data['relation']
     g.edata['timestamp'] = edge_data['timestamp']
-    
+
     return g
 
 
