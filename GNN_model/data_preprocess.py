@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from collections import defaultdict
 import json
-
+from transformers import BertTokenizer, BertModel
 
 def get_raw_graph(dct):
     # TODO: 郭礼华
@@ -34,9 +34,65 @@ def get_raw_graph(dct):
     return g
 
 
-def get_node_feat(dct):
+def get_node_feat(dct, embed_len=50):
     # TODO: 吴非凡
-    pass
+    nodes = dct['nodes']
+    nodes_num = len(nodes)
+
+    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+    
+    model = BertModel.from_pretrained('bert-base-uncased', output_hidden_states = True)
+    model.eval()
+
+    name = torch.zeros((nodes_num, embed_len)).type(torch.float64)
+    type = torch.zeros((nodes_num, embed_len)).type(torch.float64)
+    label = torch.zeros((nodes_num, 1)).type(int)
+
+    for i, node in enumerate(nodes):
+        name_token = tokenizer.tokenize(node['id'])
+        type_token = tokenizer.tokenize("[CLS] " + " [SEP] ".join(node['anonymous']) + " [SEP]")
+
+        indexed_name_tokens = tokenizer.convert_tokens_to_ids(name_token)
+        name_segments_ids = [1] * len(name_token)
+        indexed_type_tokens = tokenizer.convert_tokens_to_ids(type_token)
+        type_segments_ids = [1] * len(type_token)
+
+        name_token_tensor = torch.tensor(indexed_name_tokens)
+        type_token_tensor = torch.tensor(indexed_type_tokens)
+    
+        with torch.no_grad():
+
+            name_outputs = model(name_token_tensor, name_segments_ids)
+            name_hidden_states = name_outputs[2]
+
+            type_outputs = model(type_token_tensor, type_segments_ids)
+            type_hidden_states = type_outputs[2]
+
+            name_embeddings = torch.stack(name_hidden_states, dim=0)
+            name_embeddings = torch.squeeze(name_embeddings, dim=1)
+            name_embeddings = name_embeddings.permute(1,0,2)
+            name_embed = torch.zeros((name_embeddings.shape[0], name_embeddings.shape[-1]))
+
+            for i in range(name_embeddings.shape[0]):
+                token = name_embeddings[i]
+
+                sum_vec = torch.sum(token[-4:], dim=0)
+                name_embed[i] = sum_vec
+
+            name_embed = name_embed.flatten()
+
+            type_token_vecs = type_hidden_states[-2][0]
+            type_embed = torch.mean(type_token_vecs, dim=0)
+
+        name[i] = name_embed
+        type[i] = type_embed
+        label[i] = 0 if node['malicious'] == 'false' else 1
+
+    return {
+        'name': name,
+        'type': type,
+        'label': label
+    }
 
 
 def get_edge_feat(dct):
