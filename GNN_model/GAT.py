@@ -7,6 +7,9 @@ import numpy as np
 import dgl
 from data_preprocess import *
 from sklearn.metrics import average_precision_score, roc_auc_score, f1_score
+import warnings
+
+warnings.filterwarnings("ignore")
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # 加载数据集
@@ -152,8 +155,8 @@ def evaluate(model, graph, features, labels, mask):
         predicts = torch.where(logits > 0.5, 1, 0)
         correct = torch.sum(predicts == labels)
 
-        ap = average_precision_score(labels, predicts, pos_label=1)
-        auc = roc_auc_score(labels, predicts)
+        ap = average_precision_score(labels, logits, pos_label=1)
+        auc = roc_auc_score(labels, logits)
         f1 = f1_score(labels, predicts, pos_label=1)
         return correct.item() * 1.0 / len(labels), ap, auc, f1
 
