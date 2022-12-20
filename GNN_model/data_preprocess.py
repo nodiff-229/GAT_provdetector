@@ -6,14 +6,13 @@ from collections import defaultdict
 import json
 from transformers import BertTokenizer, BertModel
 
-def get_raw_graph(dct):
-    # TODO: 郭礼华
 
+def get_raw_graph(dct):
     # 先构建节点名字到idx的映射
     name_to_idx = defaultdict(int)
     idx = 0
     for node in dct['nodes']:
-        assert not node['id'] in name_to_idx.keys() # 避免有节点名字重复
+        assert not node['id'] in name_to_idx.keys()  # 避免有节点名字重复
         name_to_idx[node['id']] = idx
         idx += 1
 
@@ -29,24 +28,23 @@ def get_raw_graph(dct):
         target_idx = name_to_idx[edge['target'][0]]
         u[i] = src_idx
         v[i] = target_idx
-        
+
     g = dgl.graph((u, v))
     return g
 
 
 def get_node_feat(dct, embed_len=50):
-    # TODO: 吴非凡
     nodes = dct['nodes']
     nodes_num = len(nodes)
 
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    
-    model = BertModel.from_pretrained('bert-base-uncased', output_hidden_states = True)
+
+    model = BertModel.from_pretrained('bert-base-uncased', output_hidden_states=True)
     model.eval()
 
-    name = torch.zeros((nodes_num, embed_len)).type(torch.float64)
-    type = torch.zeros((nodes_num, embed_len)).type(torch.float64)
-    label = torch.zeros((nodes_num, 1)).type(int)
+    name = torch.zeros((nodes_num, embed_len)).type(torch.float32)
+    type = torch.zeros((nodes_num, embed_len)).type(torch.float32)
+    label = torch.zeros((nodes_num, 1)).type(torch.float32)
 
     for i, node in enumerate(nodes):
         name_token = tokenizer.tokenize(node['id'])
@@ -59,7 +57,7 @@ def get_node_feat(dct, embed_len=50):
 
         name_token_tensor = torch.tensor(indexed_name_tokens)
         type_token_tensor = torch.tensor(indexed_type_tokens)
-    
+
         with torch.no_grad():
 
             name_outputs = model(name_token_tensor, name_segments_ids)
@@ -70,7 +68,7 @@ def get_node_feat(dct, embed_len=50):
 
             name_embeddings = torch.stack(name_hidden_states, dim=0)
             name_embeddings = torch.squeeze(name_embeddings, dim=1)
-            name_embeddings = name_embeddings.permute(1,0,2)
+            name_embeddings = name_embeddings.permute(1, 0, 2)
             name_embed = torch.zeros((name_embeddings.shape[0], name_embeddings.shape[-1]))
 
             for i in range(name_embeddings.shape[0]):
@@ -96,18 +94,17 @@ def get_node_feat(dct, embed_len=50):
 
 
 def get_edge_feat(dct):
-    # TODO: 时辰轩
     # 统计只有这三种relation，所以用简单的3维one-hot表示
     relations = {
-        'down' : 0,
-        'transport_remote_ip' : 1,
-        'refer' : 2
+        'down': 0,
+        'transport_remote_ip': 1,
+        'refer': 2
     }
     edge_feat = {}
     edge_num = len(dct['edges'])
-    timestamp = torch.zeros((edge_num, 1)).type(torch.int64)
-    score = torch.zeros((edge_num, 1)).type(torch.float64)
-    relation = torch.zeros((edge_num, 3)).type(torch.int)
+    timestamp = torch.zeros((edge_num, 1)).type(torch.float32)
+    score = torch.zeros((edge_num, 1)).type(torch.float32)
+    relation = torch.zeros((edge_num, 3)).type(torch.float32)
     for i in range(edge_num):
         edge = dct['edges'][i]
         timestamp[i] = edge['time']
@@ -124,9 +121,17 @@ def read_graph(filepath):
     with open(filepath, 'r') as f:
         dct = json.load(f)
 
-    g = get_raw_graph(dct) # 读取图
+    g = get_raw_graph(dct)  # 读取图
 
     node_feat = get_node_feat(dct)
+
+    # 造假数据拉通用，注释掉
+    # node_feat = {
+    #     'name': torch.randn(g.num_nodes(), 50).type(torch.float32),
+    #     'type': torch.randn(g.num_nodes(), 50).type(torch.float32),
+    #     'label': torch.ones(g.num_nodes(), 1)
+    # }
+
     g.ndata['name'] = node_feat['name']
     g.ndata['type'] = node_feat['type']
     g.ndata['label'] = node_feat['label']
@@ -135,6 +140,20 @@ def read_graph(filepath):
     g.edata['score'] = edge_data['score']
     g.edata['relation'] = edge_data['relation']
     g.edata['timestamp'] = edge_data['timestamp']
+
+    # 划分训练集，验证集和测试集
+    # 训练集60%，验证集10%，测试集30%
+    train_mask = torch.zeros((g.num_nodes()))
+    train_mask[:int(0.6 * g.num_nodes())] = True
+    g.ndata['train_mask'] = train_mask.bool()
+
+    val_mask = torch.zeros((g.num_nodes()))
+    val_mask[int(0.6 * g.num_nodes()):int(0.7 * g.num_nodes())] = True
+    g.ndata['val_mask'] = val_mask.bool()
+
+    test_mask = torch.zeros((g.num_nodes()))
+    test_mask[int(0.7 * g.num_nodes()):] = True
+    g.ndata['test_mask'] = test_mask.bool()
 
     return g
 
@@ -183,4 +202,14 @@ def fake_dataset():
 
 if __name__ == '__main__':
     # g = fake_dataset()
-    g = read_graph('..\GNN_data_integrate\M1.json')
+    hosts = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'S1', 'S2', 'S3', 'S4']
+    # 保存图的二进制文件
+    for host in hosts:
+        g = read_graph(f'../GNN_data_integrate/{host}.json')
+        dgl.save_graphs(f'../GNN_graph/{host}.bin', g)
+    # 读取图二进制文件
+    for host in hosts:
+        g, _ = dgl.load_graphs(f'../GNN_graph/{host}.bin')
+        print(g[0].num_nodes())
+
+

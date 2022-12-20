@@ -6,6 +6,7 @@ import time
 import numpy as np
 import dgl
 from data_preprocess import *
+from sklearn.metrics import average_precision_score, roc_auc_score, f1_score
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # 加载数据集
@@ -23,11 +24,11 @@ label = graph.ndata['label']
 # features = graph.ndata['feat']
 
 # 记录各个特征初始维度
-all_dims = {'nfeat_name':graph.ndata['name'].shape[1],
-           'nfeat_type':graph.ndata['type'].shape[1],
-           'efeat_relation':graph.edata['relation'].shape[1],
-           'efeat_score':graph.edata['score'].shape[1],
-           'efeat_timestamp':graph.edata['timestamp'].shape[1],}
+all_dims = {'nfeat_name': graph.ndata['name'].shape[1],
+            'nfeat_type': graph.ndata['type'].shape[1],
+            'efeat_relation': graph.edata['relation'].shape[1],
+            'efeat_score': graph.edata['score'].shape[1],
+            'efeat_timestamp': graph.edata['timestamp'].shape[1], }
 
 # 隐藏层维度
 n_hidden = 100
@@ -49,8 +50,9 @@ weight_deacy = 3e-4
 num_epochs = 500
 
 # 将节点的两个特征concate到一起
-input_features = torch.concat((graph.ndata['name'],graph.ndata['type']), dim=-1)
+input_features = torch.concat((graph.ndata['name'], graph.ndata['type']), dim=-1)
 in_dim = input_features.shape[1]
+
 
 # 真正的GAT操作
 class GATLayer(nn.Module):
@@ -87,14 +89,14 @@ class GATLayer(nn.Module):
         return {'h': h}
 
     def forward(self, h):
-
         # 论文公式 (1)
         z = self.fc_nfeat(h)
         transformed_efeat_relation = self.fc_efeat_relation(self.g.edata['relation'])
         transformed_efeat_score = self.fc_efeat_score(self.g.edata['score'])
         transformed_efeat_timestamp = self.fc_efeat_timestamp(self.g.edata['timestamp'])
 
-        e_feat_all = torch.concat((transformed_efeat_relation,transformed_efeat_score,transformed_efeat_timestamp),dim=-1)
+        e_feat_all = torch.concat((transformed_efeat_relation, transformed_efeat_score, transformed_efeat_timestamp),
+                                  dim=-1)
 
         self.g.ndata['z'] = z
         self.g.edata['e_feat_all'] = e_feat_all
@@ -132,26 +134,28 @@ class GAT(nn.Module):
         # 一起。 此外输出层只有一个头。
         self.layer2 = MultiHeadGATLayer(g, hidden_dim * num_heads, out_dim, 1)
 
-    def forward(self, graph,h):
+    def forward(self, graph, h):
         h = self.layer1(h)
         h = F.elu(h)
         h = self.layer2(h)
         return h
 
 
-def evaluate(model, graph,features, labels, mask):
+def evaluate(model, graph, features, labels, mask):
     model.eval()
     with torch.no_grad():
-        logits = model(graph,features)
+        logits = model(graph, features)
         logits = logits[mask]
         labels = labels[mask]
         # _, indices = torch.max(logits, dim=1)
         logits = F.sigmoid(logits)
         predicts = torch.where(logits > 0.5, 1, 0)
         correct = torch.sum(predicts == labels)
-        return correct.item() * 1.0 / len(labels)
 
-
+        ap = average_precision_score(labels, predicts, pos_label=1)
+        auc = roc_auc_score(labels, predicts)
+        f1 = f1_score(labels, predicts, pos_label=1)
+        return correct.item() * 1.0 / len(labels), ap, auc, f1
 
 
 # 加载数据集
@@ -169,8 +173,6 @@ def evaluate(model, graph,features, labels, mask):
 # features = graph.ndata['feat']
 
 
-
-
 model = GAT(graph,
             in_dim=in_dim,
             hidden_dim=n_hidden,
@@ -185,7 +187,7 @@ for epoch in range(num_epochs):
     if epoch >= 3:
         t0 = time.time()
 
-    logits = model(graph,input_features)
+    logits = model(graph, input_features)
     # logp = F.log_softmax(logits, 1)
     # loss = F.nll_loss(logp[train_mask], label[train_mask])
     # loss = criterion(logits[train_mask].unsqueeze(1), label[train_mask].unsqueeze(1).type(torch.float))
@@ -194,7 +196,7 @@ for epoch in range(num_epochs):
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    acc_val = evaluate(model, graph,input_features, label, val_mask)
+    acc_val, ap_val, auc_val, f1_val = evaluate(model, graph, input_features, label, val_mask)
 
     x = epoch
     y_loss = loss.cpu().detach().numpy()
@@ -203,8 +205,11 @@ for epoch in range(num_epochs):
     if epoch >= 3:
         dur.append(time.time() - t0)
 
-    print("Epoch {:05d} | Loss {:.4f} | Time(s) {:.4f} | Accuracy {:.4f}".format(
-        epoch, loss.item(), np.mean(dur), acc_val))
+    print(
+        "Epoch {:05d} | Loss {:.4f} | Time(s) {:.4f} | Accuracy {:.4f}| Ap {:.4f}| Auc {:.4f}| F1-score {:.4f}".format(
+            epoch, loss.item(), np.mean(dur), acc_val, ap_val, auc_val, f1_val))
 
-acc_test = evaluate(model, graph,input_features, label, test_mask)
-print("Test Accuracy {:.4f}".format(acc_test))
+acc_test, ap_test, auc_test, f1_test = evaluate(model, graph, input_features, label, test_mask)
+print(
+    "Test Accuracy {:.4f} | Test Ap {:.4f} | Test AUC {:.4f} | Test F1-score {:.4f}".format(acc_test, ap_test, auc_test,
+                                                                                            f1_test))
