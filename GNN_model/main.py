@@ -11,51 +11,6 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-# 加载数据集
-graph = fake_dataset()
-graph = dgl.remove_self_loop(graph)
-graph = dgl.add_self_loop(graph)
-# 把graph搬到device上
-graph = graph.to(device)
-
-train_mask = graph.ndata['train_mask']
-val_mask = graph.ndata['val_mask']
-test_mask = graph.ndata['test_mask']
-label = graph.ndata['label']
-
-# features = graph.ndata['feat']
-
-# 记录各个特征初始维度
-all_dims = {'nfeat_name': graph.ndata['name'].shape[1],
-            'nfeat_type': graph.ndata['type'].shape[1],
-            'efeat_relation': graph.edata['relation'].shape[1],
-            'efeat_score': graph.edata['score'].shape[1],
-            'efeat_timestamp': graph.edata['timestamp'].shape[1], }
-
-# 隐藏层维度
-n_hidden = 100
-
-# 输出维度
-n_classes = 1
-
-# 注意力头数
-num_heads = 8
-
-# dropout系数
-feat_drop = 0.6
-
-# attention dropout系数
-attn_drop = 0.5
-
-lr = 0.01
-weight_deacy = 3e-4
-num_epochs = 500
-
-# 将节点的两个特征concate到一起
-input_features = torch.concat((graph.ndata['name'], graph.ndata['type']), dim=-1)
-in_dim = input_features.shape[1]
-
 
 # 真正的GAT操作
 class GATLayer(nn.Module):
@@ -155,64 +110,96 @@ def evaluate(model, graph, features, labels, mask):
         predicts = torch.where(logits > 0.5, 1, 0)
         correct = torch.sum(predicts == labels)
 
-        ap = average_precision_score(labels, logits, pos_label=1)
+        ap = average_precision_score(labels, logits, pos_label=0)
         auc = roc_auc_score(labels, logits)
-        f1 = f1_score(labels, predicts, pos_label=1)
+        f1 = f1_score(labels, predicts, pos_label=0)
         return correct.item() * 1.0 / len(labels), ap, auc, f1
 
 
-# 加载数据集
-# dataset = CoraGraphDataset('../cora')
-# graph = dataset[0]
-# graph = dgl.remove_self_loop(graph)
-# graph = dgl.add_self_loop(graph)
-# 把graph搬到gpu上
-# graph = graph.to(device)
+if __name__ == '__main__':
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # 加载数据集
+    graph = fake_dataset()
+    graph = dgl.remove_self_loop(graph)
+    graph = dgl.add_self_loop(graph)
+    # 把graph搬到device上
+    graph = graph.to(device)
 
-# train_mask = graph.ndata['train_mask']
-# val_mask = graph.ndata['val_mask']
-# test_mask = graph.ndata['test_mask']
-# label = graph.ndata['label']
-# features = graph.ndata['feat']
+    train_mask = graph.ndata['train_mask']
+    val_mask = graph.ndata['val_mask']
+    test_mask = graph.ndata['test_mask']
+    label = graph.ndata['label']
 
+    # features = graph.ndata['feat']
 
-model = GAT(graph,
-            in_dim=in_dim,
-            hidden_dim=n_hidden,
-            out_dim=n_classes,
-            num_heads=num_heads)
-model = model.to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_deacy)
-criterion = torch.nn.BCEWithLogitsLoss()
-dur = []
+    # 记录各个特征初始维度
+    all_dims = {'nfeat_name': graph.ndata['name'].shape[1],
+                'nfeat_type': graph.ndata['type'].shape[1],
+                'efeat_relation': graph.edata['relation'].shape[1],
+                'efeat_score': graph.edata['score'].shape[1],
+                'efeat_timestamp': graph.edata['timestamp'].shape[1], }
 
-for epoch in range(num_epochs):
-    if epoch >= 3:
-        t0 = time.time()
+    # 隐藏层维度
+    n_hidden = 100
 
-    logits = model(graph, input_features)
-    # logp = F.log_softmax(logits, 1)
-    # loss = F.nll_loss(logp[train_mask], label[train_mask])
-    # loss = criterion(logits[train_mask].unsqueeze(1), label[train_mask].unsqueeze(1).type(torch.float))
-    loss = criterion(logits[train_mask], label[train_mask])
+    # 输出维度
+    n_classes = 1
 
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    acc_val, ap_val, auc_val, f1_val = evaluate(model, graph, input_features, label, val_mask)
+    # 注意力头数
+    num_heads = 8
 
-    x = epoch
-    y_loss = loss.cpu().detach().numpy()
-    y_acc = acc_val
+    # dropout系数
+    feat_drop = 0.6
 
-    if epoch >= 3:
-        dur.append(time.time() - t0)
+    # attention dropout系数
+    attn_drop = 0.5
 
+    lr = 0.01
+    weight_deacy = 3e-4
+    num_epochs = 500
+
+    # 将节点的两个特征concate到一起
+    input_features = torch.concat((graph.ndata['name'], graph.ndata['type']), dim=-1)
+    in_dim = input_features.shape[1]
+
+    model = GAT(graph,
+                in_dim=in_dim,
+                hidden_dim=n_hidden,
+                out_dim=n_classes,
+                num_heads=num_heads)
+    model = model.to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_deacy)
+    criterion = torch.nn.BCEWithLogitsLoss()
+    dur = []
+
+    for epoch in range(num_epochs):
+        if epoch >= 3:
+            t0 = time.time()
+
+        logits = model(graph, input_features)
+        # logp = F.log_softmax(logits, 1)
+        # loss = F.nll_loss(logp[train_mask], label[train_mask])
+        # loss = criterion(logits[train_mask].unsqueeze(1), label[train_mask].unsqueeze(1).type(torch.float))
+        loss = criterion(logits[train_mask], label[train_mask])
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        acc_val, ap_val, auc_val, f1_val = evaluate(model, graph, input_features, label, val_mask)
+
+        x = epoch
+        y_loss = loss.cpu().detach().numpy()
+        y_acc = acc_val
+
+        if epoch >= 3:
+            dur.append(time.time() - t0)
+
+        print(
+            "Epoch {:05d} | Loss {:.4f} | Time(s) {:.4f} | Accuracy {:.4f}| Ap {:.4f}| Auc {:.4f}| F1-score {:.4f}".format(
+                epoch, loss.item(), np.mean(dur), acc_val, ap_val, auc_val, f1_val))
+
+    acc_test, ap_test, auc_test, f1_test = evaluate(model, graph, input_features, label, test_mask)
     print(
-        "Epoch {:05d} | Loss {:.4f} | Time(s) {:.4f} | Accuracy {:.4f}| Ap {:.4f}| Auc {:.4f}| F1-score {:.4f}".format(
-            epoch, loss.item(), np.mean(dur), acc_val, ap_val, auc_val, f1_val))
-
-acc_test, ap_test, auc_test, f1_test = evaluate(model, graph, input_features, label, test_mask)
-print(
-    "Test Accuracy {:.4f} | Test Ap {:.4f} | Test AUC {:.4f} | Test F1-score {:.4f}".format(acc_test, ap_test, auc_test,
-                                                                                            f1_test))
+        "Test Accuracy {:.4f} | Test Ap {:.4f} | Test AUC {:.4f} | Test F1-score {:.4f}".format(acc_test, ap_test,
+                                                                                                auc_test,
+                                                                                                f1_test))
