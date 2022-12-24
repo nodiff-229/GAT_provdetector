@@ -110,20 +110,40 @@ def evaluate(model, graph, features, labels, mask):
         predicts = torch.where(logits > 0.5, 1, 0)
         correct = torch.sum(predicts == labels)
 
-        ap = average_precision_score(labels, logits, pos_label=0)
+        ap = average_precision_score(labels, logits, pos_label=1)
         auc = roc_auc_score(labels, logits)
-        f1 = f1_score(labels, predicts, pos_label=0)
+        f1 = f1_score(labels, predicts, pos_label=1)
         return correct.item() * 1.0 / len(labels), ap, auc, f1
 
 
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # 加载数据集
-    graph = fake_dataset()
+    hosts = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'S1', 'S2', 'S3', 'S4']
+    # graph = fake_dataset()
+    g, _ = dgl.load_graphs(f'../GNN_graph/{hosts[0]}.bin')
+    graph = g[0]
     graph = dgl.remove_self_loop(graph)
     graph = dgl.add_self_loop(graph)
     # 把graph搬到device上
     graph = graph.to(device)
+
+    train_mask = torch.zeros((graph.num_nodes()))
+    train_mask[:int(0.3 * graph.num_nodes())] = True
+    graph.ndata['train_mask'] = train_mask.bool()
+
+    val_mask = torch.zeros((graph.num_nodes()))
+    val_mask[:int(1 * graph.num_nodes())] = True
+    graph.ndata['val_mask'] = val_mask.bool()
+
+    test_mask = torch.zeros((graph.num_nodes()))
+    test_mask[:int(1 * graph.num_nodes())] = True
+    graph.ndata['test_mask'] = test_mask.bool()
+
+
+
+
+
 
     train_mask = graph.ndata['train_mask']
     val_mask = graph.ndata['val_mask']
@@ -156,7 +176,7 @@ if __name__ == '__main__':
 
     lr = 0.01
     weight_deacy = 3e-4
-    num_epochs = 500
+    num_epochs = 100
 
     # 将节点的两个特征concate到一起
     input_features = torch.concat((graph.ndata['name'], graph.ndata['type']), dim=-1)
