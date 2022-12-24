@@ -139,8 +139,7 @@ def get_node_feat1(dct, embed_len=768):
 
         name[i] = name_embed
         type[i] = type_embed
-        label[i] = 0 if node['malicious'] == 'false' else 1
-
+        label[i] = 1 if node['malicious'] else 0
     return {
         'name': name,
         'type': type,
