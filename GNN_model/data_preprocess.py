@@ -239,17 +239,17 @@ def fake_dataset():
     g.edata['timestamp'] = torch.randn(g.num_edges(), 1).type(torch.float32)
 
     # 划分训练集，验证集和测试集
-    # 训练集60%，验证集10%，测试集30%
+    # 训练集30%，验证集100%，测试集100%
     train_mask = torch.zeros((g.num_nodes()))
-    train_mask[:int(0.6 * g.num_nodes())] = True
+    train_mask[:int(0.7 * g.num_nodes())] = True
     g.ndata['train_mask'] = train_mask.bool()
 
     val_mask = torch.zeros((g.num_nodes()))
-    val_mask[int(0.6 * g.num_nodes()):int(0.7 * g.num_nodes())] = True
+    val_mask[:int(1 * g.num_nodes())] = True
     g.ndata['val_mask'] = val_mask.bool()
 
     test_mask = torch.zeros((g.num_nodes()))
-    test_mask[int(0.7 * g.num_nodes()):] = True
+    test_mask[:int(1 * g.num_nodes())] = True
     g.ndata['test_mask'] = test_mask.bool()
     return g
 

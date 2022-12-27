@@ -119,9 +119,9 @@ def evaluate(model, graph, features, labels, mask):
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # 加载数据集
-    hosts = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'S1', 'S2', 'S3', 'S4']
+    hosts = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'S1', 'S3', 'S4']
     # graph = fake_dataset()
-    g, _ = dgl.load_graphs(f'../GNN_graph/{hosts[0]}.bin')
+    g, _ = dgl.load_graphs(f'../GNN_graph_all/{hosts[0]}.bin')
     graph = g[0]
     graph = dgl.remove_self_loop(graph)
     graph = dgl.add_self_loop(graph)
@@ -140,10 +140,8 @@ if __name__ == '__main__':
     test_mask[:int(1 * graph.num_nodes())] = True
     graph.ndata['test_mask'] = test_mask.bool()
 
-
-
-
-
+    index, _ = torch.where(graph.ndata['label'] == 1)
+    graph.ndata['train_mask'][index] = True
 
     train_mask = graph.ndata['train_mask']
     val_mask = graph.ndata['val_mask']
@@ -169,14 +167,14 @@ if __name__ == '__main__':
     num_heads = 8
 
     # dropout系数
-    feat_drop = 0.6
+    feat_drop = 0.5
 
     # attention dropout系数
-    attn_drop = 0.5
+    attn_drop = 0.2
 
     lr = 0.01
     weight_deacy = 3e-4
-    num_epochs = 100
+    num_epochs = 500
 
     # 将节点的两个特征concate到一起
     input_features = torch.concat((graph.ndata['name'], graph.ndata['type']), dim=-1)
