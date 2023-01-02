@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-import dgl
 import dgl.nn as dglnn
 from dgl import AddSelfLoop
 from dgl.data import CiteseerGraphDataset, CoraGraphDataset, PubmedGraphDataset
@@ -14,23 +13,22 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-class GCN(nn.Module):
+class SAGE(nn.Module):
     def __init__(self, in_size, hid_size, out_size):
         super().__init__()
         self.layers = nn.ModuleList()
-        # two-layer GCN
-        self.layers.append(
-            dglnn.GraphConv(in_size, hid_size, activation=F.relu)
-        )
-        self.layers.append(dglnn.GraphConv(hid_size, out_size))
+        # two-layer GraphSAGE-mean
+        self.layers.append(dglnn.SAGEConv(in_size, hid_size, "gcn"))
+        self.layers.append(dglnn.SAGEConv(hid_size, out_size, "gcn"))
         self.dropout = nn.Dropout(0.5)
 
-    def forward(self, g, features):
-        h = features
-        for i, layer in enumerate(self.layers):
-            if i != 0:
+    def forward(self, graph, x):
+        h = self.dropout(x)
+        for l, layer in enumerate(self.layers):
+            h = layer(graph, h)
+            if l != len(self.layers) - 1:
+                h = F.relu(h)
                 h = self.dropout(h)
-            h = layer(g, h)
         return h
 
 
@@ -57,8 +55,8 @@ def train(g, features, labels, masks, model):
     # define train/val samples, loss function and optimizer
     train_mask = masks[0]
     val_mask = masks[1]
-    loss_fcn = nn.BCEWithLogitsLoss()
     # loss_fcn = nn.CrossEntropyLoss()
+    loss_fcn = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-2, weight_decay=5e-4)
 
     # training loop
@@ -79,15 +77,15 @@ def train(g, features, labels, masks, model):
 
 if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="GraphSAGE")
     parser.add_argument(
         "--dataset",
         type=str,
         default="real",
-        help="Dataset name ('cora', 'citeseer', 'pubmed','fake','real').",
+        help="Dataset name ('cora', 'citeseer', 'pubmed','fake','real')",
     )
     args = parser.parse_args()
-    print(f"Training with DGL built-in GraphConv module.")
+    print(f"Training with DGL built-in GraphSage module")
 
     # load and preprocess dataset
     transform = (
@@ -142,11 +140,10 @@ if __name__ == "__main__":
     labels = g.ndata["label"]
     masks = g.ndata["train_mask"], g.ndata["val_mask"], g.ndata["test_mask"]
 
-    # create GCN model
+    # create GraphSAGE model
     in_size = features.shape[1]
-    # out_size = data.num_classes
     out_size = 1
-    model = GCN(in_size, 16, out_size).to(device)
+    model = SAGE(in_size, 16, out_size).to(device)
 
     # model training
     print("Training...")
