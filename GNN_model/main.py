@@ -98,6 +98,34 @@ class GAT(nn.Module):
         h = self.layer2(h)
         return h
 
+class GAT_s(nn.Module):
+    """
+    1.Add pre-processing and post-processing layers
+    2.Using 3 GATlayer with mean aggregate
+    3.Add skip connections between GATlayers
+    """
+    def __init__(self, g, in_dim, hidden_dim, out_dim, num_heads, num_layers=3):
+        super(GAT_s, self).__init__()
+        self.preprocess1 = nn.Linear(in_dim, hidden_dim)
+        self.preprocess2 = nn.Linear(hidden_dim, hidden_dim)
+        self.layers = []
+        for i in range(num_layers):
+            layer = MultiHeadGATLayer(g, hidden_dim, hidden_dim, num_heads, 'mean')
+            self.layers.append(layer)
+        self.postprocess1 = nn.Linear(hidden_dim, hidden_dim)
+        self.postprocess2 = nn.Linear(hidden_dim, out_dim)
+
+    def forward(self, graph, h):
+        h = self.preprocess1(h)
+        h = self.preprocess2(h)
+        for layer in self.layers:
+            x = layer(h)
+            x = F.elu(x)
+            h = h + x
+        h = self.postprocess1(h)
+        h = self.postprocess2(h)
+        return h
+
 
 def evaluate(model, graph, features, labels, mask):
     model.eval()
