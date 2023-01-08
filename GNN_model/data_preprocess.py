@@ -1,3 +1,5 @@
+import os.path
+
 import torch
 import dgl
 import numpy as np
@@ -149,16 +151,34 @@ def get_node_feat1(dct, embed_len=768):
 
 def get_edge_feat(dct):
     # 统计只有这三种relation，所以用简单的3维one-hot表示
+    # relations = {
+    #     'down': 0,
+    #     'transport_remote_ip': 1,
+    #     'refer': 2
+    # }
     relations = {
-        'down': 0,
-        'transport_remote_ip': 1,
-        'refer': 2
+        "redirect": 0,
+        "transport_remote_ip": 1,
+        "write": 2,
+        "create_pipe": 3,
+        "listen_remote_ip": 4,
+        "append": 5,
+        "connected_remote_ip": 6,
+        "down": 7,
+        "delete": 8,
+        "assign_remote_ip": 9,
+        "web_request": 10,
+        "addsubdirectory": 11,
+        "refer": 12,
+        "receive": 13,
+        "read": 14,
+        "execute": 15,
     }
     edge_feat = {}
     edge_num = len(dct['edges'])
     timestamp = torch.zeros((edge_num, 1)).type(torch.float32)
     score = torch.zeros((edge_num, 1)).type(torch.float32)
-    relation = torch.zeros((edge_num, 3)).type(torch.float32)
+    relation = torch.zeros((edge_num, 16)).type(torch.float32)
     for i in range(edge_num):
         edge = dct['edges'][i]
         timestamp[i] = edge['time']
@@ -253,18 +273,24 @@ def fake_dataset():
     g.ndata['test_mask'] = test_mask.bool()
     return g
 
-
-if __name__ == '__main__':
-    # g = fake_dataset()
-    hosts = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'S1', 'S2', 'S3', 'S4']
+def start_preprocess(path='./final/audit', hosts=None):
+    if hosts is None:
+        hosts = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'S1', 'S3', 'S4']
     # 保存图的二进制文件
+    out_dir = os.path.join(path, 'bin_result')
+    os.makedirs(out_dir, exist_ok=True)
     for host in hosts:
         print(f'processing {host}')
-        g = read_graph(f'../GNN_data_integrate/{host}.json')
-        dgl.save_graphs(f'../GNN_graph/{host}.bin', g)
+        g = read_graph(os.path.join(path, 'json_result', f'{host}.json'))
+        dgl.save_graphs(os.path.join(out_dir, f'{host}.bin'), g)
     # 读取图二进制文件
     for host in hosts:
-        g, _ = dgl.load_graphs(f'../GNN_graph/{host}.bin')
+        g, _ = dgl.load_graphs(os.path.join(out_dir, f'{host}.bin'))
         print(g[0].num_nodes())
+
+if __name__ == '__main__':
+    start_preprocess('../final/audit')
+    start_preprocess('../final/auditcpr')
+    start_preprocess('../final/nodemerge')
 
 

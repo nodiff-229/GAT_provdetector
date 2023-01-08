@@ -3,6 +3,7 @@ read, write, delete, execute, fork, connect, bind, resolve, web_request, refer, 
 
 """
 import json
+import os.path
 import re
 import networkx as nx
 from commons.embedding import write_sentences_to_file
@@ -177,9 +178,9 @@ def tokenize_sequences_one(seq_list):
     return seq_list
 
 
-def parse_graph(host):
-    scored_dg = nx.read_gpickle(f"./GNN_data/{host}_Scored.pkl")
-    with open(f"./GNN_data/{host}_NodeLabel.json", 'r') as f:
+def parse_graph(host, path='./final/audit'):
+    scored_dg = nx.read_gpickle(f"{path}/{host}_Scored.pkl")
+    with open(f"{path}/{host}_NodeLabel.json", 'r') as f:
         nlabels = json.load(f)
     pos_nodes = set(nlabels['pos'])
     neg_nodes = set(nlabels['neg'])
@@ -227,10 +228,17 @@ def parse_graph(host):
     return {'nodes': node_list, 'edges': parsed_list}
 
 
-if __name__ == '__main__':
+def lemma_preprocess(path='./final/audit'):
     hosts = ['S1', 'S2', 'S3', 'S4', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6']
     # hosts = ['M5']
+    out_dir = os.path.join(path, 'json_result')
+    os.makedirs(out_dir, exist_ok=True)
     for host in hosts:
-        out = parse_graph(host)
-        with open(f"./GNN_data_integrate/{host}.json", 'w') as f:
+        out = parse_graph(host, path)
+        with open(os.path.join(out_dir, f"{host}.json"), 'w') as f:
             json.dump(out, f)
+
+if __name__ == '__main__':
+    lemma_preprocess(path='./final/audit')
+    lemma_preprocess(path='./final/auditcpr')
+    lemma_preprocess(path='./final/nodemerge')
